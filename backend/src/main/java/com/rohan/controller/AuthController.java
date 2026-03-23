@@ -38,10 +38,17 @@ public class AuthController {
         USER_ROLE role = USER_ROLE.valueOf(req.getRole().toUpperCase());
 
         authService.sentLoginOtp(req.getEmail(), role);
-
+        
         ApiResponse res = new ApiResponse();
         res.setMessage("Otp sent successfully");
-
+        
+        // TEMPORARY: Return OTP in response for testing (REMOVE IN PRODUCTION)
+        // Comment this out in production
+        VerificationCode verificationCode = verificationCodeRepository.findByEmail(req.getEmail());
+        if (verificationCode != null) {
+            res.setMessage("Otp sent successfully. OTP: " + verificationCode.getOtp() + " (Testing Mode)");
+        }
+        
         return ResponseEntity.ok(res);
     }
 

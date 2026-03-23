@@ -36,6 +36,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProvider jwtProvider;
     private final VerificationCodeRepository verificationCodeRepository;
     private final EmailService emailService;
+    private final BrevoEmailService brevoEmailService;
     private final CustomUserImpl customUserImpl;
 
     @Value("${frontend.url}")
@@ -44,19 +45,19 @@ public class AuthServiceImpl implements AuthService {
     // ================= SEND OTP =================
     @Override
     public void sentLoginOtp(String email, USER_ROLE role) {
-        System.out.println(" DEBUG: Sending OTP to email: " + email);
+        System.out.println("🔐 DEBUG: Sending OTP to email: " + email);
         
         // Delete old OTP if exists
         VerificationCode existingCode =
                 verificationCodeRepository.findByEmail(email);
 
         if (existingCode != null) {
-            System.out.println(" DEBUG: Deleting old OTP for email: " + email);
+            System.out.println("🗑️ DEBUG: Deleting old OTP for email: " + email);
             verificationCodeRepository.delete(existingCode);
         }
 
         String otp = OtpUtil.generateOtp();
-        System.out.println(" DEBUG: Generated OTP: " + otp + " for email: " + email);
+        System.out.println("🎲 DEBUG: Generated OTP: " + otp + " for email: " + email);
 
         VerificationCode verificationCode = new VerificationCode();
         verificationCode.setEmail(email);
@@ -64,24 +65,22 @@ public class AuthServiceImpl implements AuthService {
         verificationCode.setExpiryTime(LocalDateTime.now().plusMinutes(5)); // 5 minutes expiry
         
         VerificationCode savedCode = verificationCodeRepository.save(verificationCode);
-        System.out.println(" DEBUG: OTP saved with ID: " + savedCode.getId() + " expiry: " + savedCode.getExpiryTime());
+        System.out.println("💾 DEBUG: OTP saved with ID: " + savedCode.getId() + " expiry: " + savedCode.getExpiryTime());
 
-        // Send email asynchronously - don't let email failure affect OTP saving
+        // Send email using Brevo API - don't let email failure affect OTP saving
         try {
-            emailService.sendVerificationOtpEmail(
-                    email,
-                    otp,
-                    "Sastaa Bazaar Login OTP",
-                    "Your OTP is: " + otp,
-                    frontend_url
-            );
-            System.out.println(" DEBUG: Email sent successfully to: " + email);
+            boolean emailSent = brevoEmailService.sendOtpEmail(email, otp);
+            if (emailSent) {
+                System.out.println("📧 DEBUG: Email sent successfully via Brevo to: " + email);
+            } else {
+                System.err.println("❌ DEBUG: Email sending failed via Brevo to: " + email);
+            }
         } catch (Exception e) {
-            System.err.println(" DEBUG: Email sending failed for: " + email + " Error: " + e.getMessage());
+            System.err.println("❌ DEBUG: Email sending failed for: " + email + " Error: " + e.getMessage());
             // Don't re-throw - OTP is still saved and valid
         }
         
-        System.out.println(" DEBUG: OTP generation completed for: " + email);
+        System.out.println("✅ DEBUG: OTP generation completed for: " + email);
     }
 
     // ================= SIGNUP =================
