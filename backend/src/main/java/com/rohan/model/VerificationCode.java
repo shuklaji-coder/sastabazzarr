@@ -2,6 +2,7 @@ package com.rohan.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
@@ -14,13 +15,20 @@ public class VerificationCode {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-     private String otp;
+    private String otp;
+    private String email;
+    
+    @Column(name = "expiry_time")
+    private LocalDateTime expiryTime;
 
-     private String email;
-
-     @OneToOne
+    @OneToOne
     private User user;
 
-     @OneToOne
+    @OneToOne
     private Seller seller;
+    
+    // Check if OTP is expired
+    public boolean isExpired() {
+        return expiryTime != null && LocalDateTime.now().isAfter(expiryTime);
+    }
 }

@@ -21,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -43,48 +44,75 @@ public class AuthServiceImpl implements AuthService {
     // ================= SEND OTP =================
     @Override
     public void sentLoginOtp(String email, USER_ROLE role) {
-        // Removed strict user checking here because this endpoint 
-        // /auth/sent/login-signup-otp is used for BOTH login and signup.
-        // If we strictly check userRepository here, new signups will fail.
-
+        System.out.println(" DEBUG: Sending OTP to email: " + email);
+        
         // Delete old OTP if exists
         VerificationCode existingCode =
                 verificationCodeRepository.findByEmail(email);
 
         if (existingCode != null) {
+            System.out.println(" DEBUG: Deleting old OTP for email: " + email);
             verificationCodeRepository.delete(existingCode);
         }
 
         String otp = OtpUtil.generateOtp();
+        System.out.println(" DEBUG: Generated OTP: " + otp + " for email: " + email);
 
         VerificationCode verificationCode = new VerificationCode();
         verificationCode.setEmail(email);
         verificationCode.setOtp(otp);
-        verificationCodeRepository.save(verificationCode);
+        verificationCode.setExpiryTime(LocalDateTime.now().plusMinutes(5)); // 5 minutes expiry
+        
+        VerificationCode savedCode = verificationCodeRepository.save(verificationCode);
+        System.out.println(" DEBUG: OTP saved with ID: " + savedCode.getId() + " expiry: " + savedCode.getExpiryTime());
 
-        emailService.sendVerificationOtpEmail(
-                email,
-                otp,
-                "Sastaa Bazaar Login OTP",
-                "Your OTP is: " + otp,
-                frontend_url
-        );
+        // Send email asynchronously - don't let email failure affect OTP saving
+        try {
+            emailService.sendVerificationOtpEmail(
+                    email,
+                    otp,
+                    "Sastaa Bazaar Login OTP",
+                    "Your OTP is: " + otp,
+                    frontend_url
+            );
+            System.out.println(" DEBUG: Email sent successfully to: " + email);
+        } catch (Exception e) {
+            System.err.println(" DEBUG: Email sending failed for: " + email + " Error: " + e.getMessage());
+            // Don't re-throw - OTP is still saved and valid
+        }
+        
+        System.out.println(" DEBUG: OTP generation completed for: " + email);
     }
 
     // ================= SIGNUP =================
     @Override
     public String createUser(SignupRequest req) {
+        System.out.println(" DEBUG: Signup attempt for email: " + req.getEmail());
 
         VerificationCode verificationCode =
                 verificationCodeRepository.findByEmail(req.getEmail());
 
-        if (verificationCode == null ||
-                !verificationCode.getOtp().equals(req.getOtp())) {
+        if (verificationCode == null) {
+            System.out.println(" DEBUG: No OTP found for email: " + req.getEmail());
             throw new RuntimeException("Invalid OTP");
         }
 
+        if (verificationCode.isExpired()) {
+            System.out.println(" DEBUG: OTP expired for email: " + req.getEmail() + " expired at: " + verificationCode.getExpiryTime());
+            verificationCodeRepository.delete(verificationCode);
+            throw new RuntimeException("OTP expired. Please request a new OTP.");
+        }
+
+        if (!verificationCode.getOtp().equals(req.getOtp())) {
+            System.out.println(" DEBUG: OTP mismatch for email: " + req.getEmail() + " expected: " + verificationCode.getOtp() + " got: " + req.getOtp());
+            throw new RuntimeException("Invalid OTP");
+        }
+
+        System.out.println(" DEBUG: OTP verified successfully for email: " + req.getEmail());
+
         // OTP delete after success
         verificationCodeRepository.delete(verificationCode);
+        System.out.println(" DEBUG: OTP deleted after successful verification for: " + req.getEmail());
 
         if (userRepository.findByEmail(req.getEmail()) != null) {
             throw new RuntimeException("User already exists");
@@ -100,6 +128,7 @@ public class AuthServiceImpl implements AuthService {
         );
 
         userRepository.save(createdUser);
+        System.out.println(" DEBUG: User created successfully: " + createdUser.getEmail());
 
         // Create cart automatically
         Cart cart = new Cart();
@@ -152,24 +181,40 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private Authentication authenticate(String email, String otp) throws Exception {
+        System.out.println(" DEBUG: Login attempt for email: " + email + " with OTP: " + otp);
 
         UserDetails userDetails =
                 customUserImpl.loadUserByUsername(email);
 
         if (userDetails == null) {
+            System.out.println(" DEBUG: User not found for email: " + email);
             throw new BadCredentialsException("Invalid Email");
         }
 
         VerificationCode verificationCode =
                 verificationCodeRepository.findByEmail(email);
 
-        if (verificationCode == null ||
-                !verificationCode.getOtp().equals(otp)) {
+        if (verificationCode == null) {
+            System.out.println(" DEBUG: No OTP found for email: " + email);
             throw new BadCredentialsException("Wrong OTP");
         }
 
+        if (verificationCode.isExpired()) {
+            System.out.println(" DEBUG: OTP expired for email: " + email + " expired at: " + verificationCode.getExpiryTime());
+            verificationCodeRepository.delete(verificationCode);
+            throw new BadCredentialsException("OTP expired. Please request a new OTP.");
+        }
+
+        if (!verificationCode.getOtp().equals(otp)) {
+            System.out.println(" DEBUG: OTP mismatch for email: " + email + " expected: " + verificationCode.getOtp() + " got: " + otp);
+            throw new BadCredentialsException("Wrong OTP");
+        }
+
+        System.out.println(" DEBUG: OTP verified successfully for email: " + email);
+
         // OTP delete after successful login
         verificationCodeRepository.delete(verificationCode);
+        System.out.println(" DEBUG: OTP deleted after successful login for: " + email);
 
         return new UsernamePasswordAuthenticationToken(
                 userDetails,

@@ -1,7 +1,9 @@
 package com.rohan.controller;
 
 import com.rohan.Config.JwtProvider;
+import com.rohan.Repository.VerificationCodeRepository;
 import com.rohan.model.USER_ROLE;
+import com.rohan.model.VerificationCode;
 import com.rohan.request.LoginOtpRequest;
 import com.rohan.request.Loginrequest;
 import com.rohan.response.ApiResponse;
@@ -22,6 +24,9 @@ public class AuthController {
 
     @Autowired
     private JwtProvider jwtProvider;
+
+    @Autowired
+    private VerificationCodeRepository verificationCodeRepository;
 
 
 
@@ -62,5 +67,18 @@ public class AuthController {
         res.setRole(USER_ROLE.ROLE_CUSTOMER); // From service layer defaults
 
         return ResponseEntity.ok(res);
+    }
+
+    // TEMPORARY: Get OTP for testing (REMOVE IN PRODUCTION)
+    @GetMapping("/get-otp/{email}")
+    public ResponseEntity<String> getOtpForTesting(@PathVariable String email) {
+        VerificationCode verificationCode = verificationCodeRepository.findByEmail(email);
+        if (verificationCode == null) {
+            return ResponseEntity.ok("No OTP found for email: " + email);
+        }
+        
+        String response = "OTP for " + email + ": " + verificationCode.getOtp() + 
+                         " (Expires at: " + verificationCode.getExpiryTime() + ")";
+        return ResponseEntity.ok(response);
     }
 }
