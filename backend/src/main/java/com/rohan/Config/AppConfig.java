@@ -37,6 +37,7 @@ public class AppConfig {
                         management.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/api/products/*/reviews").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()
@@ -70,7 +71,8 @@ public class AppConfig {
                         "http://localhost:5173", 
                         "http://localhost:8080", 
                         "http://127.0.0.1:5173", 
-                        "http://127.0.0.1:8080"
+                        "http://127.0.0.1:8080",
+                        "https://subtle-gumdrop-648ce7.netlify.app"
                 ));
                 corsConfiguration.setAllowedMethods(Collections.singletonList("*"));
                 corsConfiguration.setAllowedHeaders(Collections.singletonList("*"));
